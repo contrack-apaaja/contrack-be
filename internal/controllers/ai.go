@@ -303,3 +303,39 @@ func (c *AIController) GetAnalysisStats(ctx *gin.Context) {
 
 	utils.SuccessResponse(ctx, http.StatusOK, "Statistics retrieved successfully", stats)
 }
+
+// AnalyzeContractRisk analyzes a contract with multiple clauses for potential risks using AI
+// @Summary Analyze contract risk using AI
+// @Description Analyzes a contract with multiple clauses for potential legal risks and provides recommendations
+// @Tags AI Analysis
+// @Accept json
+// @Produce json
+// @Param request body models.ContractAnalysisRequest true "Contract analysis request"
+// @Success 200 {object} models.ContractAnalysisResult
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 404 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/ai/analyze-contract [post]
+func (c *AIController) AnalyzeContractRisk(ctx *gin.Context) {
+	var req models.ContractAnalysisRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponse(ctx, http.StatusBadRequest, "Invalid request format", "VALIDATION_ERROR", err.Error())
+		return
+	}
+
+	// Get user ID from context
+	userID, exists := ctx.Get("user_id")
+	if !exists {
+		utils.ErrorResponse(ctx, http.StatusUnauthorized, "User not authenticated", "AUTH_ERROR", nil)
+		return
+	}
+
+	// Analyze contract with multiple clauses
+	result, err := c.aiService.AnalyzeContractRisk(req.ContractID, req.ClauseTemplateIDs, userID.(string))
+	if err != nil {
+		utils.ErrorResponse(ctx, http.StatusInternalServerError, "Failed to analyze contract", "AI_ERROR", err.Error())
+		return
+	}
+
+	utils.SuccessResponse(ctx, http.StatusOK, "Contract analysis completed successfully", result)
+}
