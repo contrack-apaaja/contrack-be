@@ -58,12 +58,12 @@ func Setup(r *gin.Engine, jwtSvc *jwtService.Service, authSvc *authService.Servi
 			// Clause template routes
 			clauses := protected.Group("/clauses")
 			{
+				// All operations available to all authenticated users
 				clauses.POST("/", clauseController.CreateClauseTemplate)
 				clauses.GET("/", clauseController.ListClauseTemplates)
 				clauses.GET("/:id", clauseController.GetClauseTemplate)
 				clauses.PUT("/:id", clauseController.UpdateClauseTemplate)
 				clauses.DELETE("/:id", clauseController.DeleteClauseTemplate)
-
 				clauses.GET("/by-code/:code", clauseController.GetClauseTemplateByCode)
 				clauses.GET("/search", clauseController.SearchClauseTemplates)
 				clauses.GET("/types", clauseController.GetClauseTypes)
@@ -84,14 +84,13 @@ func Setup(r *gin.Engine, jwtSvc *jwtService.Service, authSvc *authService.Servi
 			// Contract routes
 			contracts := protected.Group("/contracts")
 			{
+				// All operations available to all authenticated users
 				contracts.GET("/stats", contractController.GetContractStats)
-
 				contracts.POST("/", contractController.CreateContract)
 				contracts.GET("/", contractController.ListContracts)
 				contracts.GET("/:id", contractController.GetContract)
 				contracts.PUT("/:id", contractController.UpdateContract)
 				contracts.DELETE("/:id", contractController.DeleteContract)
-
 				contracts.POST("/:id/status", contractController.ChangeContractStatus)
 				contracts.GET("/:id/status-history", contractController.GetContractStatusHistory)
 			}
@@ -99,8 +98,9 @@ func Setup(r *gin.Engine, jwtSvc *jwtService.Service, authSvc *authService.Servi
 			// Contract versioning routes
 			contractVersions := protected.Group("/contract-versions")
 			{
-				contractVersions.POST("/:baseId", contractController.CreateContractVersion)
+				// All operations available to all authenticated users
 				contractVersions.GET("/:baseId", contractController.GetContractVersions)
+				contractVersions.POST("/:baseId", contractController.CreateContractVersion)
 			}
 
 			// Stakeholder routes

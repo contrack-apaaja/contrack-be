@@ -42,7 +42,8 @@ func Close() error {
 
 // CreateUsersTable creates the users table if it doesn't exist
 func CreateUsersTable() error {
-	query := `
+	// First, create the table if it doesn't exist (without role column for backward compatibility)
+	createTableQuery := `
 	CREATE TABLE IF NOT EXISTS users (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		email VARCHAR(255) UNIQUE NOT NULL,
@@ -54,12 +55,86 @@ func CreateUsersTable() error {
 	CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 	`
 
-	_, err := DB.Exec(query)
+	_, err := DB.Exec(createTableQuery)
 	if err != nil {
 		return fmt.Errorf("failed to create users table: %w", err)
 	}
 
 	log.Println("Users table created successfully")
+	return nil
+}
+
+// MigrateExistingUsersToRegularRole updates existing users to have REGULAR role
+func MigrateExistingUsersToRegularRole() error {
+	// Step 1: Check if role column exists
+	var columnExists bool
+	checkColumnQuery := `
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns 
+			WHERE table_name = 'users' AND column_name = 'role'
+		)
+	`
+	
+	err := DB.QueryRow(checkColumnQuery).Scan(&columnExists)
+	if err != nil {
+		return fmt.Errorf("failed to check if role column exists: %w", err)
+	}
+
+	// Step 2: Add role column only if it doesn't exist
+	if !columnExists {
+		addColumnQuery := `ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT 'REGULAR'`
+		_, err = DB.Exec(addColumnQuery)
+		if err != nil {
+			return fmt.Errorf("failed to add role column: %w", err)
+		}
+		log.Println("Role column added successfully")
+	} else {
+		log.Println("Role column already exists")
+	}
+
+	// Step 3: Update any existing users with NULL role to REGULAR
+	updateQuery := `UPDATE users SET role = 'REGULAR' WHERE role IS NULL OR role = ''`
+	_, err = DB.Exec(updateQuery)
+	if err != nil {
+		return fmt.Errorf("failed to update existing users to REGULAR role: %w", err)
+	}
+
+	// Step 4: Check if constraint exists and add if not
+	var constraintExists bool
+	checkConstraintQuery := `
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.check_constraints 
+			WHERE constraint_name = 'users_role_check'
+		)
+	`
+	
+	err = DB.QueryRow(checkConstraintQuery).Scan(&constraintExists)
+	if err != nil {
+		return fmt.Errorf("failed to check if role constraint exists: %w", err)
+	}
+
+	if !constraintExists {
+		addConstraintQuery := `
+			ALTER TABLE users ADD CONSTRAINT users_role_check 
+			CHECK (role IN ('REGULAR', 'LEGAL', 'MANAGEMENT'))
+		`
+		_, err = DB.Exec(addConstraintQuery)
+		if err != nil {
+			return fmt.Errorf("failed to add role constraint: %w", err)
+		}
+		log.Println("Role constraint added successfully")
+	} else {
+		log.Println("Role constraint already exists")
+	}
+
+	// Step 5: Create index on role column
+	createIndexQuery := `CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)`
+	_, err = DB.Exec(createIndexQuery)
+	if err != nil {
+		return fmt.Errorf("failed to create role index: %w", err)
+	}
+
+	log.Println("Existing users migrated to REGULAR role successfully")
 	return nil
 }
 
@@ -285,6 +360,11 @@ func CreateContractSequenceTable() error {
 // Migrate runs all necessary database migrations
 func Migrate() error {
 	if err := CreateUsersTable(); err != nil {
+		return err
+	}
+	
+	// Migrate existing users to have REGULAR role
+	if err := SimpleRoleMigration(); err != nil {
 		return err
 	}
 	
