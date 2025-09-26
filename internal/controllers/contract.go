@@ -328,3 +328,69 @@ func (cc *ContractController) GetContractVersions(c *gin.Context) {
 
 	utils.SuccessResponse(c, http.StatusOK, "Contract versions retrieved successfully", contracts)
 }
+
+// SaveContractAnalysis saves AI analysis results for a contract
+func (cc *ContractController) SaveContractAnalysis(c *gin.Context) {
+	var req models.ContractAnalysisSaveRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Invalid request format", "VALIDATION_ERROR", err.Error())
+		return
+	}
+
+	// Get user ID from context
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.ErrorResponse(c, http.StatusUnauthorized, "User not authenticated", "AUTH_ERROR", nil)
+		return
+	}
+
+	// Save analysis results
+	err := cc.contractService.SaveContractAnalysis(req.ContractID, req.AnalysisResult, userID.(string))
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Failed to save contract analysis", "SAVE_ERROR", err.Error())
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Contract analysis saved successfully", map[string]interface{}{
+		"contract_id": req.ContractID,
+		"status": "PENDING_LEGAL_REVIEW",
+		"message": "Contract analyzed and ready for legal review",
+	})
+}
+
+// ProcessLegalReview processes legal review decision
+func (cc *ContractController) ProcessLegalReview(c *gin.Context) {
+	var req models.LegalReviewRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Invalid request format", "VALIDATION_ERROR", err.Error())
+		return
+	}
+
+	// Validate decision
+	if req.Decision != "approve" && req.Decision != "reject" {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Invalid decision", "VALIDATION_ERROR", "Decision must be 'approve' or 'reject'")
+		return
+	}
+
+	// If rejected, require rejected_reason
+	if req.Decision == "reject" && req.RejectedReason == "" {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Rejected reason required", "VALIDATION_ERROR", "Rejected reason is required when rejecting contract")
+		return
+	}
+
+	// Get user ID from context
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.ErrorResponse(c, http.StatusUnauthorized, "User not authenticated", "AUTH_ERROR", nil)
+		return
+	}
+
+	// Process legal review
+	result, err := cc.contractService.ProcessLegalReview(req.ContractID, req.Decision, req.Notes, req.RejectedReason, userID.(string))
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Failed to process legal review", "REVIEW_ERROR", err.Error())
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Legal review processed successfully", result)
+}

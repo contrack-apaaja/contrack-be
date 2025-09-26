@@ -492,3 +492,13 @@ func (s *Service) GetContractStats(userID string) (map[string]int, error) {
 
 	return stats, nil
 }
+
+// SaveContractAnalysis saves AI analysis results for a contract
+func (s *Service) SaveContractAnalysis(contractID int, analysisResult *models.ContractAnalysisResult, reviewedBy string) error {
+	return s.contractRepo.SaveContractAnalysis(contractID, analysisResult, reviewedBy)
+}
+
+// ProcessLegalReview processes legal review decision
+func (s *Service) ProcessLegalReview(contractID int, decision string, notes string, rejectedReason string, reviewedBy string) (*models.LegalReviewResponse, error) {
+	return s.contractRepo.ProcessLegalReview(contractID, decision, notes, rejectedReason, reviewedBy)
+}
