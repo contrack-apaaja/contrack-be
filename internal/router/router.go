@@ -74,6 +74,7 @@ func Setup(r *gin.Engine, jwtSvc *jwtService.Service, authSvc *authService.Servi
 			ai := protected.Group("/ai")
 			{
 				ai.POST("/analyze", aiController.AnalyzeClauseRisk)
+				ai.POST("/analyze-contract", aiController.AnalyzeContractRisk)
 				ai.GET("/analysis/:id", aiController.GetAnalysisByID)
 				ai.GET("/analysis/clause/:clause_id", aiController.GetAnalysisByClauseID)
 				ai.GET("/analyses", aiController.GetAnalyses)

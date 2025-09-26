@@ -96,3 +96,21 @@ func GetRiskLevelFromScore(score float64) RiskLevel {
 		return RiskLevelLow
 	}
 }
+
+// ContractAnalysisRequest represents the request for analyzing a contract
+type ContractAnalysisRequest struct {
+	ContractID        int   `json:"contract_id" binding:"required"`
+	ClauseTemplateIDs []int `json:"clause_template_ids" binding:"required,min=1"`
+}
+
+// ContractAnalysisResult represents the AI analysis result for a contract
+type ContractAnalysisResult struct {
+	ContractID        int                    `json:"contract_id"`
+	ClauseAnalyses    []ClauseRiskAnalysis   `json:"clause_analyses"`
+	OverallRiskLevel  RiskLevel              `json:"overall_risk_level"`
+	OverallRiskScore  float64                `json:"overall_risk_score"`
+	ContractSummary   string                 `json:"contract_summary"`
+	KeyRisks          []string               `json:"key_risks"`
+	Recommendations   []string               `json:"recommendations"`
+	CreatedAt         time.Time              `json:"created_at"`
+}
