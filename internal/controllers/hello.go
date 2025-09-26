@@ -1,17 +1,17 @@
 package controllers
 
 import (
-	"net/http"
-
 	"contrack-be/internal/services/supabase"
+	"contrack-be/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )
 
 func Hello(c *gin.Context) {
 	ok := supabase.IsConfigured()
-	c.JSON(http.StatusOK, gin.H{
-		"message":             "Hello, world!",
+	utils.OKResponse(c, "Hello from Contrack API!", gin.H{
 		"supabase_configured": ok,
+		"version":            "1.0.0",
+		"service":            "authentication",
 	})
 }

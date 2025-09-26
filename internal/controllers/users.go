@@ -2,19 +2,23 @@ package controllers
 
 import (
 	"context"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 
 	"contrack-be/internal/repository"
+	"contrack-be/internal/utils"
 )
 
 func ListUsers(c *gin.Context) {
 	repo := repository.NewUserRepo()
 	users, err := repo.List(context.Background())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		utils.InternalServerErrorResponse(c, "Failed to retrieve users")
 		return
 	}
-	c.JSON(http.StatusOK, users)
+	
+	utils.OKResponse(c, "Users retrieved successfully", gin.H{
+		"users": users,
+		"count": len(users),
+	})
 }
