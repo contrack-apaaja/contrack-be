@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>CORS Test</title>
+</head>
+
+<body>
+    <h1>CORS Test Page</h1>
+    <button onclick="testCORS()">Test CORS</button>
+    <div id="result"></div>
+
+    <script>
+        async function testCORS() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Testing...';
+
+            try {
+                // Test 1: Simple GET request (should work)
+                console.log('Testing simple GET request...');
+                const response1 = await fetch('http://localhost:8080/api/hello', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data1 = await response1.json();
+                console.log('Simple GET response:', data1);
+
+                // Test 2: GET request with Authorization header (will trigger preflight)
+                console.log('Testing GET request with Authorization header...');
+                const response2 = await fetch('http://localhost:8080/api/clauses', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer test-token'
+                    }
+                });
+
+                console.log('Response status:', response2.status);
+                console.log('Response headers:', [...response2.headers.entries()]);
+
+                if (response2.ok) {
+                    const data2 = await response2.json();
+                    console.log('Clauses response:', data2);
+                    resultDiv.innerHTML = `
+                        <p>✅ CORS is working!</p>
+                        <p>Hello endpoint: ${JSON.stringify(data1)}</p>
+                        <p>Clauses endpoint: ${JSON.stringify(data2)}</p>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <p>⚠️ CORS preflight works, but request failed</p>
+                        <p>Status: ${response2.status}</p>
+                        <p>This is likely due to authentication - the token is invalid</p>
+                    `;
+                }
+
+            } catch (error) {
+                console.error('CORS test failed:', error);
+                resultDiv.innerHTML = `
+                    <p>❌ CORS test failed</p>
+                    <p>Error: ${error.message}</p>
+                `;
+            }
+        }
+    </script>
+</body>
+
+</html>
