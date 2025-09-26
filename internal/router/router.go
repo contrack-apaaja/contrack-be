@@ -16,22 +16,22 @@ func Setup(r *gin.Engine, jwtSvc *jwtService.Service, authSvc *authService.Servi
 	// Create repositories
 	clauseRepo := repository.NewClauseTemplateRepository()
 	aiRepo := repository.NewAIRepository()
-	
+
 	// Create AI service
 	aiService := ai.NewOpenAIService(cfg)
-	
+
 	// Create controllers
 	authController := controllers.NewAuthController(authSvc)
 	clauseController := controllers.NewClauseController()
 	aiController := controllers.NewAIController(aiService, aiRepo, clauseRepo)
 	contractController := controllers.NewContractController()
 	stakeholderController := controllers.NewStakeholderController()
-	
+
 	api := r.Group("/api")
 	{
 		// Public routes (no authentication required)
 		api.GET("/hello", controllers.Hello)
-		
+
 		// Authentication routes
 		auth := api.Group("/auth")
 		{
@@ -39,64 +39,59 @@ func Setup(r *gin.Engine, jwtSvc *jwtService.Service, authSvc *authService.Servi
 			auth.POST("/login", authController.Login)
 			auth.POST("/refresh", authController.RefreshToken)
 		}
-		
+
 		// Protected routes (authentication required)
 		protected := api.Group("/")
 		protected.Use(middleware.AuthMiddleware(jwtSvc))
 		{
 			// User profile routes
 			protected.GET("/profile", authController.Profile)
-			
+
 			// User management routes
 			protected.GET("/users", controllers.ListUsers)
-			
+
 			// Clause template routes
 			clauses := protected.Group("/clauses")
 			{
-				// CRUD operations
 				clauses.POST("/", clauseController.CreateClauseTemplate)
 				clauses.GET("/", clauseController.ListClauseTemplates)
 				clauses.GET("/:id", clauseController.GetClauseTemplate)
 				clauses.PUT("/:id", clauseController.UpdateClauseTemplate)
 				clauses.DELETE("/:id", clauseController.DeleteClauseTemplate)
-				
-				// Additional endpoints
+
 				clauses.GET("/by-code/:code", clauseController.GetClauseTemplateByCode)
 				clauses.GET("/search", clauseController.SearchClauseTemplates)
 				clauses.GET("/types", clauseController.GetClauseTypes)
 				clauses.PATCH("/:id/toggle-status", clauseController.ToggleClauseTemplateStatus)
 			}
-			
+
 			// AI Analysis routes
 			ai := protected.Group("/ai")
 			{
-				// AI analysis endpoints
 				ai.POST("/analyze", aiController.AnalyzeClauseRisk)
 				ai.GET("/analysis/:id", aiController.GetAnalysisByID)
 				ai.GET("/analysis/clause/:clause_id", aiController.GetAnalysisByClauseID)
 				ai.GET("/analyses", aiController.GetAnalyses)
 				ai.DELETE("/analysis/:id", aiController.DeleteAnalysis)
 				ai.GET("/stats", aiController.GetAnalysisStats)
+			} // <<– tutup group AI di sini
 
 			// Contract routes
 			contracts := protected.Group("/contracts")
 			{
-				// Statistics (must be before :id routes)
 				contracts.GET("/stats", contractController.GetContractStats)
-				
-				// Basic CRUD operations
+
 				contracts.POST("/", contractController.CreateContract)
 				contracts.GET("/", contractController.ListContracts)
 				contracts.GET("/:id", contractController.GetContract)
 				contracts.PUT("/:id", contractController.UpdateContract)
 				contracts.DELETE("/:id", contractController.DeleteContract)
-				
-				// Status management
+
 				contracts.POST("/:id/status", contractController.ChangeContractStatus)
 				contracts.GET("/:id/status-history", contractController.GetContractStatusHistory)
 			}
 
-			// Contract versioning routes (separate group to avoid conflicts)
+			// Contract versioning routes
 			contractVersions := protected.Group("/contract-versions")
 			{
 				contractVersions.POST("/:baseId", contractController.CreateContractVersion)
@@ -106,14 +101,12 @@ func Setup(r *gin.Engine, jwtSvc *jwtService.Service, authSvc *authService.Servi
 			// Stakeholder routes
 			stakeholders := protected.Group("/stakeholders")
 			{
-				// CRUD operations
 				stakeholders.POST("/", stakeholderController.CreateStakeholder)
 				stakeholders.GET("/", stakeholderController.ListStakeholders)
 				stakeholders.GET("/:id", stakeholderController.GetStakeholder)
 				stakeholders.PUT("/:id", stakeholderController.UpdateStakeholder)
 				stakeholders.DELETE("/:id", stakeholderController.DeleteStakeholder)
-				
-				// Additional endpoints
+
 				stakeholders.GET("/types", stakeholderController.GetStakeholderTypes)
 			}
 		}
