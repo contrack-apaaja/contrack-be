@@ -12,6 +12,7 @@ type Config struct {
 	DatabaseURL  string
 	JWTSecret    string
 	JWTExpiresIn time.Duration
+	OpenAIAPIKey string
 }
 
 // Load reads config from environment variables with sensible defaults
@@ -36,5 +37,6 @@ func Load() *Config {
 		DatabaseURL:  os.Getenv("DATABASE_URL"),
 		JWTSecret:    jwtSecret,
 		JWTExpiresIn: jwtExpiresIn,
+		OpenAIAPIKey: os.Getenv("OPENAI_API_KEY"),
 	}
 }

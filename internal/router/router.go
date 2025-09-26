@@ -1,18 +1,29 @@
 package router
 
 import (
+	"contrack-be/internal/config"
 	"contrack-be/internal/controllers"
 	"contrack-be/internal/middleware"
+	"contrack-be/internal/repository"
+	"contrack-be/internal/services/ai"
 	authService "contrack-be/internal/services/auth"
 	jwtService "contrack-be/internal/services/jwt"
 
 	"github.com/gin-gonic/gin"
 )
 
-func Setup(r *gin.Engine, jwtSvc *jwtService.Service, authSvc *authService.Service) {
+func Setup(r *gin.Engine, jwtSvc *jwtService.Service, authSvc *authService.Service, cfg *config.Config) {
+	// Create repositories
+	clauseRepo := repository.NewClauseTemplateRepository()
+	aiRepo := repository.NewAIRepository()
+	
+	// Create AI service
+	aiService := ai.NewOpenAIService(cfg)
+	
 	// Create controllers
 	authController := controllers.NewAuthController(authSvc)
 	clauseController := controllers.NewClauseController()
+	aiController := controllers.NewAIController(aiService, aiRepo, clauseRepo)
 	
 	api := r.Group("/api")
 	{
@@ -52,6 +63,18 @@ func Setup(r *gin.Engine, jwtSvc *jwtService.Service, authSvc *authService.Servi
 				clauses.GET("/search", clauseController.SearchClauseTemplates)
 				clauses.GET("/types", clauseController.GetClauseTypes)
 				clauses.PATCH("/:id/toggle-status", clauseController.ToggleClauseTemplateStatus)
+			}
+			
+			// AI Analysis routes
+			ai := protected.Group("/ai")
+			{
+				// AI analysis endpoints
+				ai.POST("/analyze", aiController.AnalyzeClauseRisk)
+				ai.GET("/analysis/:id", aiController.GetAnalysisByID)
+				ai.GET("/analysis/clause/:clause_id", aiController.GetAnalysisByClauseID)
+				ai.GET("/analyses", aiController.GetAnalyses)
+				ai.DELETE("/analysis/:id", aiController.DeleteAnalysis)
+				ai.GET("/stats", aiController.GetAnalysisStats)
 			}
 		}
 	}
