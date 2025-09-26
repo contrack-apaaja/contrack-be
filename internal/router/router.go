@@ -10,8 +10,9 @@ import (
 )
 
 func Setup(r *gin.Engine, jwtSvc *jwtService.Service, authSvc *authService.Service) {
-	// Create auth controller
+	// Create controllers
 	authController := controllers.NewAuthController(authSvc)
+	clauseController := controllers.NewClauseController()
 	
 	api := r.Group("/api")
 	{
@@ -33,8 +34,25 @@ func Setup(r *gin.Engine, jwtSvc *jwtService.Service, authSvc *authService.Servi
 			// User profile routes
 			protected.GET("/profile", authController.Profile)
 			
-			// Other protected routes
+			// User management routes
 			protected.GET("/users", controllers.ListUsers)
+			
+			// Clause template routes
+			clauses := protected.Group("/clauses")
+			{
+				// CRUD operations
+				clauses.POST("/", clauseController.CreateClauseTemplate)
+				clauses.GET("/", clauseController.ListClauseTemplates)
+				clauses.GET("/:id", clauseController.GetClauseTemplate)
+				clauses.PUT("/:id", clauseController.UpdateClauseTemplate)
+				clauses.DELETE("/:id", clauseController.DeleteClauseTemplate)
+				
+				// Additional endpoints
+				clauses.GET("/by-code/:code", clauseController.GetClauseTemplateByCode)
+				clauses.GET("/search", clauseController.SearchClauseTemplates)
+				clauses.GET("/types", clauseController.GetClauseTypes)
+				clauses.PATCH("/:id/toggle-status", clauseController.ToggleClauseTemplateStatus)
+			}
 		}
 	}
 }
