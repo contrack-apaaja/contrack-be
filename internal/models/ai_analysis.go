@@ -31,6 +31,32 @@ type ClauseRiskAnalysis struct {
 	UpdatedAt         time.Time `json:"updated_at" db:"updated_at"`
 }
 
+// ContractRecommendations represents all recommendations for a contract
+type ContractRecommendations struct {
+	ContractID        int                    `json:"contract_id"`
+	OverallRiskLevel  RiskLevel              `json:"overall_risk_level"`
+	OverallRiskScore  float64                `json:"overall_risk_score"`
+	TotalClauses      int                    `json:"total_clauses"`
+	ClauseRecommendations []ClauseRecommendation `json:"clause_recommendations"`
+	OverallRecommendations []string           `json:"overall_recommendations"`
+	KeyRisks          []string               `json:"key_risks"`
+	CreatedAt         time.Time              `json:"created_at"`
+}
+
+// ClauseRecommendation represents recommendations for a specific clause
+type ClauseRecommendation struct {
+	ClauseID          int       `json:"clause_id"`
+	RiskLevel         RiskLevel `json:"risk_level"`
+	RiskScore         float64   `json:"risk_score"`
+	AnalysisSummary   string    `json:"analysis_summary"`
+	Recommendations   []string  `json:"recommendations"`
+	IdentifiedRisks   []string  `json:"identified_risks"`
+	LegalImplications string    `json:"legal_implications"`
+	ComplianceNotes   string    `json:"compliance_notes"`
+	ConfidenceScore   float64   `json:"confidence_score"`
+	CreatedAt         time.Time `json:"created_at"`
+}
+
 // ClauseRiskAnalysisRequest represents the request for AI analysis
 type ClauseRiskAnalysisRequest struct {
 	ClauseID int `json:"clause_id" binding:"required"`

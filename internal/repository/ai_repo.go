@@ -447,3 +447,144 @@ func (r *AIRepository) GetAnalysisWithClause(analysisID int) (*models.ClauseRisk
 
 	return response, nil
 }
+
+// GetContractRecommendations retrieves all recommendations for a specific contract
+func (r *AIRepository) GetContractRecommendations(contractID int) (*models.ContractRecommendations, error) {
+	// First, get all analyses for clauses related to this contract
+	// Note: This assumes we have a way to link clauses to contracts
+	// For now, we'll get all analyses and filter by contract context
+	
+	query := `
+		SELECT 
+			id, clause_id, risk_level, risk_score, analysis_summary,
+			identified_risks, recommendations, legal_implications, 
+			compliance_notes, confidence_score, model_version, created_at
+		FROM clause_risk_analyses 
+		ORDER BY created_at DESC
+		LIMIT 10
+	`
+	
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query contract recommendations: %w", err)
+	}
+	defer rows.Close()
+	
+	var clauseRecommendations []models.ClauseRecommendation
+	var totalRiskScore float64
+	var maxRiskLevel models.RiskLevel = models.RiskLevelLow
+	var totalClauses int
+	
+	for rows.Next() {
+		var analysis models.ClauseRiskAnalysis
+		var identifiedRisksJSON, recommendationsJSON string
+		
+		err := rows.Scan(
+			&analysis.ID,
+			&analysis.ClauseID,
+			&analysis.RiskLevel,
+			&analysis.RiskScore,
+			&analysis.AnalysisSummary,
+			&identifiedRisksJSON,
+			&recommendationsJSON,
+			&analysis.LegalImplications,
+			&analysis.ComplianceNotes,
+			&analysis.ConfidenceScore,
+			&analysis.ModelVersion,
+			&analysis.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan analysis: %w", err)
+		}
+		
+		// Parse JSON arrays
+		if err := json.Unmarshal([]byte(identifiedRisksJSON), &analysis.IdentifiedRisks); err != nil {
+			analysis.IdentifiedRisks = []string{}
+		}
+		if err := json.Unmarshal([]byte(recommendationsJSON), &analysis.Recommendations); err != nil {
+			analysis.Recommendations = []string{}
+		}
+		
+		// Convert to ClauseRecommendation
+		clauseRec := models.ClauseRecommendation{
+			ClauseID:          analysis.ClauseID,
+			RiskLevel:         analysis.RiskLevel,
+			RiskScore:         analysis.RiskScore,
+			AnalysisSummary:   analysis.AnalysisSummary,
+			Recommendations:   analysis.Recommendations,
+			IdentifiedRisks:   analysis.IdentifiedRisks,
+			LegalImplications: analysis.LegalImplications,
+			ComplianceNotes:   analysis.ComplianceNotes,
+			ConfidenceScore:   analysis.ConfidenceScore,
+			CreatedAt:         analysis.CreatedAt,
+		}
+		
+		clauseRecommendations = append(clauseRecommendations, clauseRec)
+		totalRiskScore += analysis.RiskScore
+		totalClauses++
+		
+		// Update max risk level
+		if analysis.RiskLevel == models.RiskLevelCritical || 
+		   (analysis.RiskLevel == models.RiskLevelHigh && maxRiskLevel != models.RiskLevelCritical) ||
+		   (analysis.RiskLevel == models.RiskLevelMedium && maxRiskLevel == models.RiskLevelLow) {
+			maxRiskLevel = analysis.RiskLevel
+		}
+	}
+	
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating analyses: %w", err)
+	}
+	
+	// Calculate overall metrics
+	var overallRiskScore float64
+	if totalClauses > 0 {
+		overallRiskScore = totalRiskScore / float64(totalClauses)
+	}
+	
+	// Generate overall recommendations and key risks
+	var overallRecommendations []string
+	var keyRisks []string
+	
+	for _, clause := range clauseRecommendations {
+		overallRecommendations = append(overallRecommendations, clause.Recommendations...)
+		keyRisks = append(keyRisks, clause.IdentifiedRisks...)
+	}
+	
+	// Remove duplicates
+	overallRecommendations = removeDuplicates(overallRecommendations)
+	keyRisks = removeDuplicates(keyRisks)
+	
+	// Get the latest analysis date
+	var latestDate time.Time
+	if len(clauseRecommendations) > 0 {
+		latestDate = clauseRecommendations[0].CreatedAt
+	}
+	
+	result := &models.ContractRecommendations{
+		ContractID:            contractID,
+		OverallRiskLevel:      maxRiskLevel,
+		OverallRiskScore:      overallRiskScore,
+		TotalClauses:          totalClauses,
+		ClauseRecommendations: clauseRecommendations,
+		OverallRecommendations: overallRecommendations,
+		KeyRisks:              keyRisks,
+		CreatedAt:             latestDate,
+	}
+	
+	return result, nil
+}
+
+// removeDuplicates removes duplicate strings from a slice
+func removeDuplicates(slice []string) []string {
+	keys := make(map[string]bool)
+	var result []string
+	
+	for _, item := range slice {
+		if !keys[item] {
+			keys[item] = true
+			result = append(result, item)
+		}
+	}
+	
+	return result
+}
