@@ -492,3 +492,13 @@ func (s *Service) GetContractStats(userID string) (map[string]int, error) {
 
 	return stats, nil
 }
+
+// GetContractApprovalData retrieves contract data needed for approval decision
+func (s *Service) GetContractApprovalData(contractID int) (*models.ContractApprovalResponse, error) {
+	return s.contractRepo.GetContractApprovalData(contractID)
+}
+
+// ApproveContract updates contract status to ACTIVE
+func (s *Service) ApproveContract(contractID int, approvedBy string) error {
+	return s.contractRepo.ApproveContract(contractID, approvedBy)
+}

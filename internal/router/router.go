@@ -90,6 +90,7 @@ func Setup(r *gin.Engine, jwtSvc *jwtService.Service, authSvc *authService.Servi
 				contracts.GET("/stats", contractController.GetContractStats)
 				contracts.POST("/", contractController.CreateContract)
 				contracts.GET("/", contractController.ListContracts)
+				contracts.POST("/approve", contractController.OneClickContractApproval)
 				contracts.GET("/:id", contractController.GetContract)
 				contracts.PUT("/:id", contractController.UpdateContract)
 				contracts.DELETE("/:id", contractController.DeleteContract)

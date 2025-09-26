@@ -3,6 +3,7 @@ package controllers
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"contrack-be/internal/models"
 	contractService "contrack-be/internal/services/contract"
@@ -327,4 +328,57 @@ func (cc *ContractController) GetContractVersions(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "Contract versions retrieved successfully", contracts)
+}
+
+// OneClickContractApproval handles one-click contract approval based on AI analysis
+// @Summary One-click contract approval
+// @Description Approves or flags contract for review based on AI risk analysis and contract value
+// @Tags Contract Management
+// @Accept json
+// @Produce json
+// @Param request body models.ContractApprovalRequest true "Contract approval request"
+// @Success 200 {object} models.ContractApprovalResponse
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 404 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /contracts/approve [post]
+func (cc *ContractController) OneClickContractApproval(c *gin.Context) {
+	var req models.ContractApprovalRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Invalid request format", "VALIDATION_ERROR", err.Error())
+		return
+	}
+
+	// Get user ID from context
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.ErrorResponse(c, http.StatusUnauthorized, "User not authenticated", "AUTH_ERROR", nil)
+		return
+	}
+
+	// Get contract approval data (risk analysis, value, etc.)
+	approvalData, err := cc.contractService.GetContractApprovalData(req.ContractID)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Failed to analyze contract for approval", "ANALYSIS_ERROR", err.Error())
+		return
+	}
+
+	// If contract is ready for approval (low risk), approve it
+	if approvalData.ApprovalStatus == "APPROVAL_REQUIRED" {
+		err = cc.contractService.ApproveContract(req.ContractID, userID.(string))
+		if err != nil {
+			utils.ErrorResponse(c, http.StatusInternalServerError, "Failed to approve contract", "APPROVAL_ERROR", err.Error())
+			return
+		}
+
+		// Update response with approval details
+		now := time.Now()
+		approvalData.ApprovedAt = &now
+		approvalData.ApprovedBy = userID.(string)
+		approvalData.ApprovalStatus = "ACTIVE"
+		approvalData.ApprovalMessage = "Contract approved successfully"
+		approvalData.RequiresReview = false
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Contract approval analysis completed", approvalData)
 }

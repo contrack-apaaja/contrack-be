@@ -267,3 +267,33 @@ type ContractClauseUpdateRequest struct {
 	DisplayOrder  *int    `json:"display_order,omitempty" binding:"omitempty,min=1"`
 	CustomContent *string `json:"custom_content,omitempty"`
 }
+
+// ContractApprovalRequest represents the request for one-click contract approval
+type ContractApprovalRequest struct {
+	ContractID int `json:"contract_id" binding:"required"`
+}
+
+// ContractApprovalResponse represents the response for contract approval
+type ContractApprovalResponse struct {
+	ContractID        int            `json:"contract_id"`
+	ContractName      string         `json:"contract_name"`
+	TotalValue        float64        `json:"total_value"`
+	RiskLevel         string         `json:"risk_level"`
+	RiskScore         float64        `json:"risk_score"`
+	ApprovalStatus    string         `json:"approval_status"` // "ACTIVE", "REVIEW_REQUIRED"
+	ApprovalMessage   string         `json:"approval_message"`
+	RequiresReview    bool           `json:"requires_review"`
+	ReviewReasons     []string       `json:"review_reasons,omitempty"`
+	KeyRisks          []string       `json:"key_risks,omitempty"`
+	Recommendations   []string       `json:"recommendations,omitempty"`
+	ApprovedAt        *time.Time     `json:"approved_at,omitempty"`
+	ApprovedBy        string         `json:"approved_by,omitempty"`
+	NextSteps         []string       `json:"next_steps,omitempty"`
+}
+
+// ContractApprovalCriteria represents the criteria for automatic approval
+type ContractApprovalCriteria struct {
+	MaxRiskScore      float64 `json:"max_risk_score"`      // Maximum risk score for auto-approval
+	MaxValue          float64 `json:"max_value"`            // Maximum contract value for auto-approval
+	MinConfidenceScore float64 `json:"min_confidence_score"` // Minimum AI confidence score
+}
