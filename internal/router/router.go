@@ -29,6 +29,7 @@ func Setup(r *gin.Engine, jwtSvc *jwtService.Service, authSvc *authService.Servi
 		
 		// Protected routes (authentication required)
 		protected := api.Group("/")
+		protected.Use(middleware.CorsMiddleware())
 		protected.Use(middleware.AuthMiddleware(jwtSvc))
 		{
 			// User profile routes
