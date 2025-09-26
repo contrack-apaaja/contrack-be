@@ -111,7 +111,7 @@ func (s *Service) ListClauseTemplates(req *models.ClauseTemplateSearchRequest) (
 		req.Page = 1
 	}
 	if req.Limit == 0 {
-		req.Limit = 10
+		req.Limit = 50
 	}
 	if req.SortBy == "" {
 		req.SortBy = "created_at"
@@ -166,7 +166,7 @@ func (s *Service) SearchClauseTemplates(query string, limit int) (*models.Clause
 	}
 
 	if limit == 0 {
-		searchReq.Limit = 10
+		searchReq.Limit = 50
 	}
 
 	return s.ListClauseTemplates(&searchReq)

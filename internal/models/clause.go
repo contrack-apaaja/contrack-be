@@ -101,7 +101,7 @@ func (clause *ClauseTemplate) ApplyUpdates(req *ClauseTemplateUpdateRequest) {
 func GetDefaultSearchParams() ClauseTemplateSearchRequest {
 	return ClauseTemplateSearchRequest{
 		Page:    1,
-		Limit:   10,
+		Limit:   50,
 		SortBy:  "created_at",
 		SortDir: "desc",
 	}
