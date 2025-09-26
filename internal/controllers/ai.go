@@ -331,7 +331,7 @@ func (c *AIController) AnalyzeContractRisk(ctx *gin.Context) {
 	}
 
 	// Analyze contract with multiple clauses
-	result, err := c.aiService.AnalyzeContractRisk(req.ContractID, req.ClauseTemplateIDs, userID.(string))
+	result, err := c.aiService.AnalyzeContractRisk(req.ContractID, userID.(string))
 	if err != nil {
 		utils.ErrorResponse(ctx, http.StatusInternalServerError, "Failed to analyze contract", "AI_ERROR", err.Error())
 		return
@@ -382,4 +382,29 @@ func (c *AIController) GetContractRecommendations(ctx *gin.Context) {
 	}
 
 	utils.SuccessResponse(ctx, http.StatusOK, "Contract recommendations retrieved successfully", recommendations)
+}
+
+// GetAllRecommendations retrieves all AI recommendations
+func (c *AIController) GetAllRecommendations(ctx *gin.Context) {
+	// Get user ID from context (for future use if needed)
+	_, exists := ctx.Get("user_id")
+	if !exists {
+		utils.ErrorResponse(ctx, http.StatusUnauthorized, "User not authenticated", "AUTH_ERROR", nil)
+		return
+	}
+
+	// Get all recommendations
+	recommendations, err := c.aiRepo.GetAllRecommendations()
+	if err != nil {
+		utils.ErrorResponse(ctx, http.StatusInternalServerError, "Failed to get recommendations", "DATABASE_ERROR", err.Error())
+		return
+	}
+
+	// Check if no recommendations found
+	if len(recommendations) == 0 {
+		utils.ErrorResponse(ctx, http.StatusNotFound, "No recommendations found", "NOT_FOUND", "No AI analysis found")
+		return
+	}
+
+	utils.SuccessResponse(ctx, http.StatusOK, "AI recommendations retrieved successfully", recommendations)
 }

@@ -125,8 +125,7 @@ func GetRiskLevelFromScore(score float64) RiskLevel {
 
 // ContractAnalysisRequest represents the request for analyzing a contract
 type ContractAnalysisRequest struct {
-	ContractID        int   `json:"contract_id" binding:"required"`
-	ClauseTemplateIDs []int `json:"clause_template_ids" binding:"required,min=1"`
+	ContractID int `json:"contract_id" binding:"required"`
 }
 
 // ContractAnalysisResult represents the AI analysis result for a contract

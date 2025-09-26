@@ -450,9 +450,8 @@ func (r *AIRepository) GetAnalysisWithClause(analysisID int) (*models.ClauseRisk
 
 // GetContractRecommendations retrieves all recommendations for a specific contract
 func (r *AIRepository) GetContractRecommendations(contractID int) (*models.ContractRecommendations, error) {
-	// First, get all analyses for clauses related to this contract
-	// Note: This assumes we have a way to link clauses to contracts
-	// For now, we'll get all analyses and filter by contract context
+	// For now, return all available AI analyses as recommendations
+	// TODO: Implement proper contract-clause relationship when contract_clauses table is available
 	
 	query := `
 		SELECT 
@@ -572,6 +571,66 @@ func (r *AIRepository) GetContractRecommendations(contractID int) (*models.Contr
 	}
 	
 	return result, nil
+}
+
+// GetAllRecommendations retrieves all AI recommendations
+func (r *AIRepository) GetAllRecommendations() ([]models.ClauseRiskAnalysis, error) {
+	query := `
+		SELECT 
+			id, clause_id, risk_level, risk_score, analysis_summary,
+			identified_risks, recommendations, legal_implications, 
+			compliance_notes, confidence_score, model_version, created_at
+		FROM clause_risk_analyses 
+		ORDER BY created_at DESC
+		LIMIT 20
+	`
+	
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query recommendations: %w", err)
+	}
+	defer rows.Close()
+
+	var recommendations []models.ClauseRiskAnalysis
+
+	for rows.Next() {
+		var analysis models.ClauseRiskAnalysis
+		var identifiedRisksJSON, recommendationsJSON string
+
+		err := rows.Scan(
+			&analysis.ID,
+			&analysis.ClauseID,
+			&analysis.RiskLevel,
+			&analysis.RiskScore,
+			&analysis.AnalysisSummary,
+			&identifiedRisksJSON,
+			&recommendationsJSON,
+			&analysis.LegalImplications,
+			&analysis.ComplianceNotes,
+			&analysis.ConfidenceScore,
+			&analysis.ModelVersion,
+			&analysis.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan analysis: %w", err)
+		}
+
+		// Parse JSON arrays
+		if err := json.Unmarshal([]byte(identifiedRisksJSON), &analysis.IdentifiedRisks); err != nil {
+			analysis.IdentifiedRisks = []string{}
+		}
+		if err := json.Unmarshal([]byte(recommendationsJSON), &analysis.Recommendations); err != nil {
+			analysis.Recommendations = []string{}
+		}
+
+		recommendations = append(recommendations, analysis)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating analyses: %w", err)
+	}
+
+	return recommendations, nil
 }
 
 // removeDuplicates removes duplicate strings from a slice

@@ -81,6 +81,7 @@ func Setup(r *gin.Engine, jwtSvc *jwtService.Service, authSvc *authService.Servi
 				ai.DELETE("/analysis/:id", aiController.DeleteAnalysis)
 				ai.GET("/stats", aiController.GetAnalysisStats)
 				ai.GET("/contract/:contract_id/recommendations", aiController.GetContractRecommendations)
+		ai.GET("/recommendations", aiController.GetAllRecommendations)
 			} // <<– tutup group AI di sini
 
 			// Contract routes
@@ -90,6 +91,8 @@ func Setup(r *gin.Engine, jwtSvc *jwtService.Service, authSvc *authService.Servi
 				contracts.GET("/stats", contractController.GetContractStats)
 				contracts.POST("/", contractController.CreateContract)
 				contracts.GET("/", contractController.ListContracts)
+				contracts.POST("/save-analysis", contractController.SaveContractAnalysis)
+				contracts.POST("/legal-review", contractController.ProcessLegalReview)
 				contracts.GET("/:id", contractController.GetContract)
 				contracts.PUT("/:id", contractController.UpdateContract)
 				contracts.DELETE("/:id", contractController.DeleteContract)

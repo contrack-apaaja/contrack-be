@@ -15,6 +15,7 @@ const (
 	StatusPendingLegalReview  ContractStatus = "PENDING_LEGAL_REVIEW"
 	StatusPendingSignature    ContractStatus = "PENDING_SIGNATURE"
 	StatusActive              ContractStatus = "ACTIVE"
+	StatusRejected            ContractStatus = "REJECTED"
 	StatusExpired             ContractStatus = "EXPIRED"
 	StatusTerminated          ContractStatus = "TERMINATED"
 )
@@ -22,7 +23,7 @@ const (
 // IsValidStatus checks if the status is valid
 func (s ContractStatus) IsValidStatus() bool {
 	switch s {
-	case StatusDraft, StatusPendingLegalReview, StatusPendingSignature, StatusActive, StatusExpired, StatusTerminated:
+	case StatusDraft, StatusPendingLegalReview, StatusPendingSignature, StatusActive, StatusRejected, StatusExpired, StatusTerminated:
 		return true
 	}
 	return false
@@ -32,9 +33,10 @@ func (s ContractStatus) IsValidStatus() bool {
 func (s ContractStatus) CanTransitionTo(newStatus ContractStatus) bool {
 	transitions := map[ContractStatus][]ContractStatus{
 		StatusDraft:               {StatusPendingLegalReview},
-		StatusPendingLegalReview:  {StatusDraft, StatusPendingSignature},
+		StatusPendingLegalReview:  {StatusDraft, StatusPendingSignature, StatusRejected},
 		StatusPendingSignature:    {StatusPendingLegalReview, StatusActive},
 		StatusActive:              {StatusExpired, StatusTerminated},
+		StatusRejected:            {}, // Terminal status
 		StatusExpired:             {StatusTerminated},
 		StatusTerminated:          {}, // Terminal status
 	}
@@ -260,6 +262,32 @@ type ContractClauseCreateRequest struct {
 	ClauseTemplateID int     `json:"clause_template_id" binding:"required"`
 	DisplayOrder     int     `json:"display_order" binding:"required,min=1"`
 	CustomContent    *string `json:"custom_content"`
+}
+
+// ContractAnalysisSaveRequest represents the request to save AI analysis
+type ContractAnalysisSaveRequest struct {
+	ContractID     int                    `json:"contract_id" binding:"required"`
+	AnalysisResult *ContractAnalysisResult `json:"analysis_result" binding:"required"`
+}
+
+// LegalReviewRequest represents the request for legal review
+type LegalReviewRequest struct {
+	ContractID     int    `json:"contract_id" binding:"required"`
+	Decision       string `json:"decision" binding:"required,oneof=approve reject"`
+	Notes          string `json:"notes,omitempty"`
+	RejectedReason string `json:"rejected_reason,omitempty"`
+}
+
+// LegalReviewResponse represents the response for legal review
+type LegalReviewResponse struct {
+	ContractID      int       `json:"contract_id"`
+	Decision        string    `json:"decision"`
+	Notes           string    `json:"notes,omitempty"`
+	RejectedReason  string    `json:"rejected_reason,omitempty"`
+	ReviewedBy      string    `json:"reviewed_by"`
+	ReviewedAt      time.Time `json:"reviewed_at"`
+	NewStatus       string    `json:"new_status"`
+	Message         string    `json:"message"`
 }
 
 // ContractClauseUpdateRequest represents the request for updating contract clauses

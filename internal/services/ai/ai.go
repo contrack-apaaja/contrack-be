@@ -266,12 +266,22 @@ func (s *OpenAIService) GetModelVersion() string {
 }
 
 // AnalyzeContractRisk analyzes a contract with multiple clauses
-func (s *OpenAIService) AnalyzeContractRisk(contractID int, clauseTemplateIDs []int, userID string) (*models.ContractAnalysisResult, error) {
+func (s *OpenAIService) AnalyzeContractRisk(contractID int, userID string) (*models.ContractAnalysisResult, error) {
+	// Get clause template IDs from contract
+	clauseTemplateIDs, err := s.getContractClauseTemplateIDs(contractID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get contract clause templates: %w", err)
+	}
+
+	if len(clauseTemplateIDs) == 0 {
+		return nil, fmt.Errorf("no clause templates found for contract %d", contractID)
+	}
+
 	// Analyze each clause individually using real AI analysis
 	var clauseAnalyses []models.ClauseRiskAnalysis
 	var totalRiskScore float64
 	var maxRiskLevel models.RiskLevel = models.RiskLevelLow
-	
+
 	for _, clauseTemplateID := range clauseTemplateIDs {
 		// For now, we'll create a mock clause template and use the existing AnalyzeClauseRisk method
 		// In a real implementation, you would fetch the clause template from database
@@ -423,4 +433,15 @@ Pastikan respons dalam format JSON yang valid dan memberikan insight yang mendal
 	}
 
 	return aiResponse.ContractSummary, aiResponse.KeyRisks, aiResponse.Recommendations, nil
+}
+
+// getContractClauseTemplateIDs retrieves clause template IDs for a contract
+func (s *OpenAIService) getContractClauseTemplateIDs(contractID int) ([]int, error) {
+	// For now, return mock clause template IDs
+	// In a real implementation, this would query the contract_clauses table
+	// SELECT clause_template_id FROM contract_clauses WHERE contract_id = $1
+	
+	// Mock data for testing
+	mockClauseTemplateIDs := []int{2, 3, 4, 5}
+	return mockClauseTemplateIDs, nil
 }
