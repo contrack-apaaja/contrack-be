@@ -21,7 +21,7 @@ func NewAuthService(jwtSvc *jwtService.Service) *Service {
 	return &Service{
 		jwtService: jwtSvc,
 	}
-}
+
 
 // Register creates a new user account
 func (s *Service) Register(req *models.UserRegistrationRequest) (*models.UserResponse, string, error) {
@@ -40,7 +40,13 @@ func (s *Service) Register(req *models.UserRegistrationRequest) (*models.UserRes
 		return nil, "", fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	// Create user with default REGULAR role
+	// Use provided role or default to REGULAR if not specified
+	role := req.Role
+	if role == "" {
+		role = models.GetDefaultRole()
+	}
+
+	// Create user
 	query := `
 		INSERT INTO users (email, password, role)
 		VALUES ($1, $2, $3)
@@ -48,7 +54,7 @@ func (s *Service) Register(req *models.UserRegistrationRequest) (*models.UserRes
 	`
 
 	var user models.User
-	err = database.DB.QueryRow(query, req.Email, string(hashedPassword), models.GetDefaultRole()).Scan(
+	err = database.DB.QueryRow(query, req.Email, string(hashedPassword), role).Scan(
 		&user.ID, &user.Email, &user.Role, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {

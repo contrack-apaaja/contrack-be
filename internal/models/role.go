@@ -4,19 +4,29 @@ package models
 type UserRole string
 
 const (
-	RoleRegular    UserRole = "REGULAR"
-	RoleLegal      UserRole = "LEGAL"
-	RoleManagement UserRole = "MANAGEMENT"
+	RoleUser       UserRole = "user"
+	RoleLegal      UserRole = "legal"
+	RoleManagement UserRole = "management"
 )
 
 // IsValid checks if the role is valid
 func (r UserRole) IsValid() bool {
-	return r == RoleRegular || r == RoleLegal || r == RoleManagement
+	return r == RoleUser || r == RoleLegal || r == RoleManagement
 }
 
-// CanUpdateContracts checks if the role can update contracts and clauses
-func (r UserRole) CanUpdateContracts() bool {
+// CanAccessLegalReview checks if the role can access legal review functions
+func (r UserRole) CanAccessLegalReview() bool {
 	return r == RoleLegal || r == RoleManagement
+}
+
+// CanAccessManagementApproval checks if the role can access management approval functions
+func (r UserRole) CanAccessManagementApproval() bool {
+	return r == RoleManagement
+}
+
+// CanAccessBasicFeatures checks if the role can access contracts, clauses, dashboard
+func (r UserRole) CanAccessBasicFeatures() bool {
+	return r == RoleUser || r == RoleLegal || r == RoleManagement
 }
 
 // String returns the string representation of the role
@@ -26,5 +36,5 @@ func (r UserRole) String() string {
 
 // GetDefaultRole returns the default role for new users
 func GetDefaultRole() UserRole {
-	return RoleRegular
+	return RoleUser
 }
