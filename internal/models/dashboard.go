@@ -2,69 +2,47 @@ package models
 
 import "time"
 
-// DashboardContractSummary represents a contract summary for dashboard
-type DashboardContractSummary struct {
-	ID                int            `json:"id"`
-	BaseID            string         `json:"base_id"`
-	ProjectName       string         `json:"project_name"`
-	ContractNumber    string         `json:"contract_number"`
-	ContractType      string         `json:"contract_type"`
-	Status            ContractStatus `json:"status"`
-	TotalValue        float64        `json:"total_value"`
-	SigningDate       *time.Time     `json:"signing_date"`
-	CreatedBy         string         `json:"created_by"`
-	CreatedAt         time.Time      `json:"created_at"`
-	UpdatedAt         time.Time      `json:"updated_at"`
-	
-	// Additional fields for dashboard
-	StakeholderCount  int    `json:"stakeholder_count"`
-	ClauseCount       int    `json:"clause_count"`
-	DaysSinceCreated  int    `json:"days_since_created"`
-	StatusDisplay     string `json:"status_display"`
+// SimpleContractList represents a simple contract for dashboard table
+type SimpleContractList struct {
+	ID             int            `json:"id" db:"id"`
+	ProjectName    string         `json:"project_name" db:"project_name"`
+	ContractType   string         `json:"contract_type" db:"contract_type"`
+	Status         ContractStatus `json:"status" db:"status"`
+	StatusDisplay  string         `json:"status_display"`
+	TotalValue     float64        `json:"total_value" db:"total_value"`
+	SigningDate    *time.Time     `json:"signing_date" db:"signing_date"`
+	CreatedAt      time.Time      `json:"created_at" db:"created_at"`
 }
 
-// ContractStatusStats represents statistics for each contract status
-type ContractStatusStats struct {
-	Status        ContractStatus `json:"status"`
+// StatusCount represents count for each contract status
+type StatusCount struct {
+	Status        ContractStatus `json:"status" db:"status"`
 	StatusDisplay string         `json:"status_display"`
-	Count         int            `json:"count"`
-	Percentage    float64        `json:"percentage"`
-	TotalValue    float64        `json:"total_value"`
+	Count         int            `json:"count" db:"count"`
 }
 
-// DashboardStats represents overall dashboard statistics
-type DashboardStats struct {
-	TotalContracts     int                  `json:"total_contracts"`
-	TotalValue         float64              `json:"total_value"`
-	StatusStats        []ContractStatusStats `json:"status_stats"`
-	RecentContracts    []DashboardContractSummary `json:"recent_contracts"`
-	ExpiringSoon       []DashboardContractSummary `json:"expiring_soon"`
-	HighValueContracts []DashboardContractSummary `json:"high_value_contracts"`
+// ProjectValueDistribution represents total value per project for bar chart
+type ProjectValueDistribution struct {
+	ProjectName string  `json:"project_name" db:"project_name"`
+	TotalValue  float64 `json:"total_value" db:"total_value"`
 }
 
-// DashboardRequest represents request parameters for dashboard
-type DashboardRequest struct {
-	Page          int    `form:"page" binding:"omitempty,min=1"`
-	Limit         int    `form:"limit" binding:"omitempty,min=1,max=100"`
-	Status        string `form:"status" binding:"omitempty"`
-	ContractType  string `form:"contract_type" binding:"omitempty"`
-	SortBy        string `form:"sort_by" binding:"omitempty,oneof=project_name contract_number total_value signing_date status created_at"`
-	SortDir       string `form:"sort_dir" binding:"omitempty,oneof=asc desc"`
-	IncludeStats  bool   `form:"include_stats" binding:"omitempty"`
+// ContractTypeDistribution represents contract count by type for donut/pie chart
+type ContractTypeDistribution struct {
+	ContractType string `json:"contract_type" db:"contract_type"`
+	Count        int    `json:"count" db:"count"`
 }
 
-// GetDefaultDashboardParams returns default dashboard parameters
-func GetDefaultDashboardParams() DashboardRequest {
-	return DashboardRequest{
-		Page:         1,
-		Limit:        10,
-		SortBy:       "created_at",
-		SortDir:      "desc",
-		IncludeStats: true,
-	}
+// DashboardVisualizationData represents comprehensive data for dashboard visualizations
+type DashboardVisualizationData struct {
+	StatusCounts           []StatusCount                `json:"status_counts"`
+	ProjectValueDist      []ProjectValueDistribution   `json:"project_value_distribution"`
+	ContractTypeDist      []ContractTypeDistribution   `json:"contract_type_distribution"`
+	TotalContracts        int                          `json:"total_contracts"`
+	TotalValue            float64                      `json:"total_value"`
 }
 
-// GetStatusDisplay returns a human-readable status display
+// GetStatusDisplay returns a human-readable string for the contract status
 func (s ContractStatus) GetStatusDisplay() string {
 	switch s {
 	case StatusDraft:

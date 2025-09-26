@@ -117,12 +117,8 @@ func Setup(r *gin.Engine, jwtSvc *jwtService.Service, authSvc *authService.Servi
 			// Dashboard routes
 			dashboard := protected.Group("/dashboard")
 			{
-				dashboard.GET("/stats", dashboardController.GetDashboardStats)
-				dashboard.GET("/contracts", dashboardController.GetDashboardContracts)
-				dashboard.GET("/status-stats", dashboardController.GetContractStatusStats)
-				dashboard.GET("/recent", dashboardController.GetRecentContracts)
-				dashboard.GET("/expiring", dashboardController.GetExpiringContracts)
-				dashboard.GET("/high-value", dashboardController.GetHighValueContracts)
+				dashboard.GET("/status-counts", dashboardController.GetStatusCounts)
+				dashboard.GET("/contracts", dashboardController.GetContractList)
 			}
 		}
 	}
