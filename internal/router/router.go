@@ -20,12 +20,16 @@ func Setup(r *gin.Engine, jwtSvc *jwtService.Service, authSvc *authService.Servi
 	// Create AI service
 	aiService := ai.NewOpenAIService(cfg)
 
+	// Create repositories
+	contractRepo := repository.NewContractRepository()
+
 	// Create controllers
 	authController := controllers.NewAuthController(authSvc)
 	clauseController := controllers.NewClauseController()
 	aiController := controllers.NewAIController(aiService, aiRepo, clauseRepo)
 	contractController := controllers.NewContractController()
 	stakeholderController := controllers.NewStakeholderController()
+	dashboardController := controllers.NewDashboardController(contractRepo)
 
 	api := r.Group("/api")
 	{
@@ -108,6 +112,17 @@ func Setup(r *gin.Engine, jwtSvc *jwtService.Service, authSvc *authService.Servi
 				stakeholders.DELETE("/:id", stakeholderController.DeleteStakeholder)
 
 				stakeholders.GET("/types", stakeholderController.GetStakeholderTypes)
+			}
+
+			// Dashboard routes
+			dashboard := protected.Group("/dashboard")
+			{
+				dashboard.GET("/stats", dashboardController.GetDashboardStats)
+				dashboard.GET("/contracts", dashboardController.GetDashboardContracts)
+				dashboard.GET("/status-stats", dashboardController.GetContractStatusStats)
+				dashboard.GET("/recent", dashboardController.GetRecentContracts)
+				dashboard.GET("/expiring", dashboardController.GetExpiringContracts)
+				dashboard.GET("/high-value", dashboardController.GetHighValueContracts)
 			}
 		}
 	}

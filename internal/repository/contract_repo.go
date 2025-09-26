@@ -565,6 +565,311 @@ func (r *ContractRepository) GetVersions(baseID string) ([]models.Contract, erro
 	return contracts, rows.Err()
 }
 
+// GetDashboardContracts retrieves contracts for dashboard with summary information
+func (r *ContractRepository) GetDashboardContracts(params models.DashboardRequest) ([]models.DashboardContractSummary, error) {
+	// Build the WHERE clause
+	whereConditions := []string{"c.is_deleted = false"}
+	args := []interface{}{}
+	argIndex := 1
+
+	if params.Status != "" {
+		whereConditions = append(whereConditions, fmt.Sprintf("c.status = $%d", argIndex))
+		args = append(args, params.Status)
+		argIndex++
+	}
+
+	if params.ContractType != "" {
+		whereConditions = append(whereConditions, fmt.Sprintf("c.contract_type = $%d", argIndex))
+		args = append(args, params.ContractType)
+		argIndex++
+	}
+
+	whereClause := ""
+	if len(whereConditions) > 0 {
+		whereClause = "WHERE " + strings.Join(whereConditions, " AND ")
+	}
+
+	// Build the ORDER BY clause
+	orderBy := "c.created_at DESC"
+	if params.SortBy != "" {
+		orderBy = "c." + params.SortBy
+		if params.SortDir != "" {
+			orderBy += " " + strings.ToUpper(params.SortDir)
+		}
+	}
+
+	// Calculate pagination
+	offset := (params.Page - 1) * params.Limit
+
+	// Build the main query with additional dashboard information
+	query := fmt.Sprintf(`
+		SELECT 
+			c.id, c.base_id, c.project_name, c.contract_number, c.contract_type,
+			c.status, c.total_value, c.signing_date, c.created_by, c.created_at, c.updated_at,
+			COALESCE(stakeholder_count.count, 0) as stakeholder_count,
+			COALESCE(clause_count.count, 0) as clause_count,
+			EXTRACT(DAYS FROM NOW() - c.created_at)::int as days_since_created
+		FROM contracts c
+		LEFT JOIN (
+			SELECT contract_id, COUNT(*) as count
+			FROM contract_stakeholders
+			GROUP BY contract_id
+		) stakeholder_count ON c.id = stakeholder_count.contract_id
+		LEFT JOIN (
+			SELECT contract_id, COUNT(*) as count
+			FROM contract_clauses
+			GROUP BY contract_id
+		) clause_count ON c.id = clause_count.contract_id
+		%s
+		ORDER BY %s
+		LIMIT $%d OFFSET $%d`,
+		whereClause, orderBy, argIndex, argIndex+1)
+
+	args = append(args, params.Limit, offset)
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query dashboard contracts: %w", err)
+	}
+	defer rows.Close()
+
+	var contracts []models.DashboardContractSummary
+	for rows.Next() {
+		contract := models.DashboardContractSummary{}
+		err := rows.Scan(
+			&contract.ID,
+			&contract.BaseID,
+			&contract.ProjectName,
+			&contract.ContractNumber,
+			&contract.ContractType,
+			&contract.Status,
+			&contract.TotalValue,
+			&contract.SigningDate,
+			&contract.CreatedBy,
+			&contract.CreatedAt,
+			&contract.UpdatedAt,
+			&contract.StakeholderCount,
+			&contract.ClauseCount,
+			&contract.DaysSinceCreated,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan dashboard contract: %w", err)
+		}
+		
+		// Set status display
+		contract.StatusDisplay = contract.Status.GetStatusDisplay()
+		
+		contracts = append(contracts, contract)
+	}
+
+	return contracts, rows.Err()
+}
+
+// GetContractStatusStats retrieves statistics for each contract status
+func (r *ContractRepository) GetContractStatusStats() ([]models.ContractStatusStats, error) {
+	query := `
+		SELECT 
+			status,
+			COUNT(*) as count,
+			SUM(total_value) as total_value
+		FROM contracts 
+		WHERE is_deleted = false
+		GROUP BY status
+		ORDER BY count DESC`
+
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query contract status stats: %w", err)
+	}
+	defer rows.Close()
+
+	var stats []models.ContractStatusStats
+	totalCount := 0
+	var totalValue float64
+
+	// First pass: collect data
+	for rows.Next() {
+		stat := models.ContractStatusStats{}
+		err := rows.Scan(
+			&stat.Status,
+			&stat.Count,
+			&stat.TotalValue,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan status stat: %w", err)
+		}
+		
+		stat.StatusDisplay = stat.Status.GetStatusDisplay()
+		stats = append(stats, stat)
+		totalCount += stat.Count
+		totalValue += stat.TotalValue
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating status stats: %w", err)
+	}
+
+	// Second pass: calculate percentages
+	for i := range stats {
+		if totalCount > 0 {
+			stats[i].Percentage = float64(stats[i].Count) / float64(totalCount) * 100
+		}
+	}
+
+	return stats, nil
+}
+
+// GetDashboardStats retrieves comprehensive dashboard statistics
+func (r *ContractRepository) GetDashboardStats() (*models.DashboardStats, error) {
+	// Get total contracts and total value
+	var totalContracts int
+	var totalValue float64
+	err := r.db.QueryRow(`
+		SELECT COUNT(*), COALESCE(SUM(total_value), 0)
+		FROM contracts 
+		WHERE is_deleted = false
+	`).Scan(&totalContracts, &totalValue)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get total stats: %w", err)
+	}
+
+	// Get status statistics
+	statusStats, err := r.GetContractStatusStats()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get status stats: %w", err)
+	}
+
+	// Get recent contracts (last 5)
+	recentParams := models.DashboardRequest{
+		Page:  1,
+		Limit: 5,
+		SortBy: "created_at",
+		SortDir: "desc",
+	}
+	recentContracts, err := r.GetDashboardContracts(recentParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get recent contracts: %w", err)
+	}
+
+	// Get expiring contracts (signing date in next 30 days)
+	expiringParams := models.DashboardRequest{
+		Page:  1,
+		Limit: 5,
+		SortBy: "signing_date",
+		SortDir: "asc",
+	}
+	expiringContracts, err := r.GetExpiringContracts(expiringParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get expiring contracts: %w", err)
+	}
+
+	// Get high value contracts (top 5 by value)
+	highValueParams := models.DashboardRequest{
+		Page:  1,
+		Limit: 5,
+		SortBy: "total_value",
+		SortDir: "desc",
+	}
+	highValueContracts, err := r.GetDashboardContracts(highValueParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get high value contracts: %w", err)
+	}
+
+	return &models.DashboardStats{
+		TotalContracts:     totalContracts,
+		TotalValue:         totalValue,
+		StatusStats:        statusStats,
+		RecentContracts:    recentContracts,
+		ExpiringSoon:       expiringContracts,
+		HighValueContracts: highValueContracts,
+	}, nil
+}
+
+// GetExpiringContracts retrieves contracts that are expiring soon
+func (r *ContractRepository) GetExpiringContracts(params models.DashboardRequest) ([]models.DashboardContractSummary, error) {
+	// Build the WHERE clause for expiring contracts
+	whereConditions := []string{
+		"c.is_deleted = false",
+		"c.status = 'ACTIVE'",
+		"c.signing_date IS NOT NULL",
+		"c.signing_date BETWEEN NOW() AND NOW() + INTERVAL '30 days'",
+	}
+	whereClause := "WHERE " + strings.Join(whereConditions, " AND ")
+
+	// Build the ORDER BY clause
+	orderBy := "c.signing_date ASC"
+	if params.SortBy != "" {
+		orderBy = "c." + params.SortBy
+		if params.SortDir != "" {
+			orderBy += " " + strings.ToUpper(params.SortDir)
+		}
+	}
+
+	// Calculate pagination
+	offset := (params.Page - 1) * params.Limit
+
+	// Build the main query
+	query := fmt.Sprintf(`
+		SELECT 
+			c.id, c.base_id, c.project_name, c.contract_number, c.contract_type,
+			c.status, c.total_value, c.signing_date, c.created_by, c.created_at, c.updated_at,
+			COALESCE(stakeholder_count.count, 0) as stakeholder_count,
+			COALESCE(clause_count.count, 0) as clause_count,
+			EXTRACT(DAYS FROM NOW() - c.created_at)::int as days_since_created
+		FROM contracts c
+		LEFT JOIN (
+			SELECT contract_id, COUNT(*) as count
+			FROM contract_stakeholders
+			GROUP BY contract_id
+		) stakeholder_count ON c.id = stakeholder_count.contract_id
+		LEFT JOIN (
+			SELECT contract_id, COUNT(*) as count
+			FROM contract_clauses
+			GROUP BY contract_id
+		) clause_count ON c.id = clause_count.contract_id
+		%s
+		ORDER BY %s
+		LIMIT %d OFFSET %d`,
+		whereClause, orderBy, params.Limit, offset)
+
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query expiring contracts: %w", err)
+	}
+	defer rows.Close()
+
+	var contracts []models.DashboardContractSummary
+	for rows.Next() {
+		contract := models.DashboardContractSummary{}
+		err := rows.Scan(
+			&contract.ID,
+			&contract.BaseID,
+			&contract.ProjectName,
+			&contract.ContractNumber,
+			&contract.ContractType,
+			&contract.Status,
+			&contract.TotalValue,
+			&contract.SigningDate,
+			&contract.CreatedBy,
+			&contract.CreatedAt,
+			&contract.UpdatedAt,
+			&contract.StakeholderCount,
+			&contract.ClauseCount,
+			&contract.DaysSinceCreated,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan expiring contract: %w", err)
+		}
+		
+		// Set status display
+		contract.StatusDisplay = contract.Status.GetStatusDisplay()
+		
+		contracts = append(contracts, contract)
+	}
+
+	return contracts, rows.Err()
+}
+
 // CanEdit checks if a contract can be edited based on its status
 func (r *ContractRepository) CanEdit(contractID int) (bool, error) {
 	var status models.ContractStatus
@@ -623,6 +928,311 @@ func (r *ContractRepository) GetContractsByStatus(status models.ContractStatus, 
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan contract: %w", err)
 		}
+		contracts = append(contracts, contract)
+	}
+
+	return contracts, rows.Err()
+}
+
+// GetDashboardContracts retrieves contracts for dashboard with summary information
+func (r *ContractRepository) GetDashboardContracts(params models.DashboardRequest) ([]models.DashboardContractSummary, error) {
+	// Build the WHERE clause
+	whereConditions := []string{"c.is_deleted = false"}
+	args := []interface{}{}
+	argIndex := 1
+
+	if params.Status != "" {
+		whereConditions = append(whereConditions, fmt.Sprintf("c.status = $%d", argIndex))
+		args = append(args, params.Status)
+		argIndex++
+	}
+
+	if params.ContractType != "" {
+		whereConditions = append(whereConditions, fmt.Sprintf("c.contract_type = $%d", argIndex))
+		args = append(args, params.ContractType)
+		argIndex++
+	}
+
+	whereClause := ""
+	if len(whereConditions) > 0 {
+		whereClause = "WHERE " + strings.Join(whereConditions, " AND ")
+	}
+
+	// Build the ORDER BY clause
+	orderBy := "c.created_at DESC"
+	if params.SortBy != "" {
+		orderBy = "c." + params.SortBy
+		if params.SortDir != "" {
+			orderBy += " " + strings.ToUpper(params.SortDir)
+		}
+	}
+
+	// Calculate pagination
+	offset := (params.Page - 1) * params.Limit
+
+	// Build the main query with additional dashboard information
+	query := fmt.Sprintf(`
+		SELECT 
+			c.id, c.base_id, c.project_name, c.contract_number, c.contract_type,
+			c.status, c.total_value, c.signing_date, c.created_by, c.created_at, c.updated_at,
+			COALESCE(stakeholder_count.count, 0) as stakeholder_count,
+			COALESCE(clause_count.count, 0) as clause_count,
+			EXTRACT(DAYS FROM NOW() - c.created_at)::int as days_since_created
+		FROM contracts c
+		LEFT JOIN (
+			SELECT contract_id, COUNT(*) as count
+			FROM contract_stakeholders
+			GROUP BY contract_id
+		) stakeholder_count ON c.id = stakeholder_count.contract_id
+		LEFT JOIN (
+			SELECT contract_id, COUNT(*) as count
+			FROM contract_clauses
+			GROUP BY contract_id
+		) clause_count ON c.id = clause_count.contract_id
+		%s
+		ORDER BY %s
+		LIMIT $%d OFFSET $%d`,
+		whereClause, orderBy, argIndex, argIndex+1)
+
+	args = append(args, params.Limit, offset)
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query dashboard contracts: %w", err)
+	}
+	defer rows.Close()
+
+	var contracts []models.DashboardContractSummary
+	for rows.Next() {
+		contract := models.DashboardContractSummary{}
+		err := rows.Scan(
+			&contract.ID,
+			&contract.BaseID,
+			&contract.ProjectName,
+			&contract.ContractNumber,
+			&contract.ContractType,
+			&contract.Status,
+			&contract.TotalValue,
+			&contract.SigningDate,
+			&contract.CreatedBy,
+			&contract.CreatedAt,
+			&contract.UpdatedAt,
+			&contract.StakeholderCount,
+			&contract.ClauseCount,
+			&contract.DaysSinceCreated,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan dashboard contract: %w", err)
+		}
+		
+		// Set status display
+		contract.StatusDisplay = contract.Status.GetStatusDisplay()
+		
+		contracts = append(contracts, contract)
+	}
+
+	return contracts, rows.Err()
+}
+
+// GetContractStatusStats retrieves statistics for each contract status
+func (r *ContractRepository) GetContractStatusStats() ([]models.ContractStatusStats, error) {
+	query := `
+		SELECT 
+			status,
+			COUNT(*) as count,
+			SUM(total_value) as total_value
+		FROM contracts 
+		WHERE is_deleted = false
+		GROUP BY status
+		ORDER BY count DESC`
+
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query contract status stats: %w", err)
+	}
+	defer rows.Close()
+
+	var stats []models.ContractStatusStats
+	totalCount := 0
+	var totalValue float64
+
+	// First pass: collect data
+	for rows.Next() {
+		stat := models.ContractStatusStats{}
+		err := rows.Scan(
+			&stat.Status,
+			&stat.Count,
+			&stat.TotalValue,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan status stat: %w", err)
+		}
+		
+		stat.StatusDisplay = stat.Status.GetStatusDisplay()
+		stats = append(stats, stat)
+		totalCount += stat.Count
+		totalValue += stat.TotalValue
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating status stats: %w", err)
+	}
+
+	// Second pass: calculate percentages
+	for i := range stats {
+		if totalCount > 0 {
+			stats[i].Percentage = float64(stats[i].Count) / float64(totalCount) * 100
+		}
+	}
+
+	return stats, nil
+}
+
+// GetDashboardStats retrieves comprehensive dashboard statistics
+func (r *ContractRepository) GetDashboardStats() (*models.DashboardStats, error) {
+	// Get total contracts and total value
+	var totalContracts int
+	var totalValue float64
+	err := r.db.QueryRow(`
+		SELECT COUNT(*), COALESCE(SUM(total_value), 0)
+		FROM contracts 
+		WHERE is_deleted = false
+	`).Scan(&totalContracts, &totalValue)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get total stats: %w", err)
+	}
+
+	// Get status statistics
+	statusStats, err := r.GetContractStatusStats()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get status stats: %w", err)
+	}
+
+	// Get recent contracts (last 5)
+	recentParams := models.DashboardRequest{
+		Page:  1,
+		Limit: 5,
+		SortBy: "created_at",
+		SortDir: "desc",
+	}
+	recentContracts, err := r.GetDashboardContracts(recentParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get recent contracts: %w", err)
+	}
+
+	// Get expiring contracts (signing date in next 30 days)
+	expiringParams := models.DashboardRequest{
+		Page:  1,
+		Limit: 5,
+		SortBy: "signing_date",
+		SortDir: "asc",
+	}
+	expiringContracts, err := r.GetExpiringContracts(expiringParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get expiring contracts: %w", err)
+	}
+
+	// Get high value contracts (top 5 by value)
+	highValueParams := models.DashboardRequest{
+		Page:  1,
+		Limit: 5,
+		SortBy: "total_value",
+		SortDir: "desc",
+	}
+	highValueContracts, err := r.GetDashboardContracts(highValueParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get high value contracts: %w", err)
+	}
+
+	return &models.DashboardStats{
+		TotalContracts:     totalContracts,
+		TotalValue:         totalValue,
+		StatusStats:        statusStats,
+		RecentContracts:    recentContracts,
+		ExpiringSoon:       expiringContracts,
+		HighValueContracts: highValueContracts,
+	}, nil
+}
+
+// GetExpiringContracts retrieves contracts that are expiring soon
+func (r *ContractRepository) GetExpiringContracts(params models.DashboardRequest) ([]models.DashboardContractSummary, error) {
+	// Build the WHERE clause for expiring contracts
+	whereConditions := []string{
+		"c.is_deleted = false",
+		"c.status = 'ACTIVE'",
+		"c.signing_date IS NOT NULL",
+		"c.signing_date BETWEEN NOW() AND NOW() + INTERVAL '30 days'",
+	}
+	whereClause := "WHERE " + strings.Join(whereConditions, " AND ")
+
+	// Build the ORDER BY clause
+	orderBy := "c.signing_date ASC"
+	if params.SortBy != "" {
+		orderBy = "c." + params.SortBy
+		if params.SortDir != "" {
+			orderBy += " " + strings.ToUpper(params.SortDir)
+		}
+	}
+
+	// Calculate pagination
+	offset := (params.Page - 1) * params.Limit
+
+	// Build the main query
+	query := fmt.Sprintf(`
+		SELECT 
+			c.id, c.base_id, c.project_name, c.contract_number, c.contract_type,
+			c.status, c.total_value, c.signing_date, c.created_by, c.created_at, c.updated_at,
+			COALESCE(stakeholder_count.count, 0) as stakeholder_count,
+			COALESCE(clause_count.count, 0) as clause_count,
+			EXTRACT(DAYS FROM NOW() - c.created_at)::int as days_since_created
+		FROM contracts c
+		LEFT JOIN (
+			SELECT contract_id, COUNT(*) as count
+			FROM contract_stakeholders
+			GROUP BY contract_id
+		) stakeholder_count ON c.id = stakeholder_count.contract_id
+		LEFT JOIN (
+			SELECT contract_id, COUNT(*) as count
+			FROM contract_clauses
+			GROUP BY contract_id
+		) clause_count ON c.id = clause_count.contract_id
+		%s
+		ORDER BY %s
+		LIMIT %d OFFSET %d`,
+		whereClause, orderBy, params.Limit, offset)
+
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query expiring contracts: %w", err)
+	}
+	defer rows.Close()
+
+	var contracts []models.DashboardContractSummary
+	for rows.Next() {
+		contract := models.DashboardContractSummary{}
+		err := rows.Scan(
+			&contract.ID,
+			&contract.BaseID,
+			&contract.ProjectName,
+			&contract.ContractNumber,
+			&contract.ContractType,
+			&contract.Status,
+			&contract.TotalValue,
+			&contract.SigningDate,
+			&contract.CreatedBy,
+			&contract.CreatedAt,
+			&contract.UpdatedAt,
+			&contract.StakeholderCount,
+			&contract.ClauseCount,
+			&contract.DaysSinceCreated,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan expiring contract: %w", err)
+		}
+		
+		// Set status display
+		contract.StatusDisplay = contract.Status.GetStatusDisplay()
+		
 		contracts = append(contracts, contract)
 	}
 
