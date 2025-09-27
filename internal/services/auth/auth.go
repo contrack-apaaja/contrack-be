@@ -20,8 +20,8 @@ type Service struct {
 func NewAuthService(jwtSvc *jwtService.Service) *Service {
 	return &Service{
 		jwtService: jwtSvc,
-	}
-}
+	}}
+
 
 // Register creates a new user account
 func (s *Service) Register(req *models.UserRegistrationRequest) (*models.UserResponse, string, error) {
@@ -40,16 +40,22 @@ func (s *Service) Register(req *models.UserRegistrationRequest) (*models.UserRes
 		return nil, "", fmt.Errorf("failed to hash password: %w", err)
 	}
 
+	// Use provided role or default to REGULAR if not specified
+	role := models.UserRole(req.Role)
+	if role == "" {
+		role = models.GetDefaultRole()
+	}
+
 	// Create user
 	query := `
-		INSERT INTO users (email, password)
-		VALUES ($1, $2)
-		RETURNING id, email, created_at, updated_at
+		INSERT INTO users (email, password, role)
+		VALUES ($1, $2, $3)
+		RETURNING id, email, role, created_at, updated_at
 	`
 
 	var user models.User
-	err = database.DB.QueryRow(query, req.Email, string(hashedPassword)).Scan(
-		&user.ID, &user.Email, &user.CreatedAt, &user.UpdatedAt,
+	err = database.DB.QueryRow(query, req.Email, string(hashedPassword), role).Scan(
+		&user.ID, &user.Email, &user.Role, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to create user: %w", err)
@@ -95,14 +101,14 @@ func (s *Service) Login(req *models.UserLoginRequest) (*models.UserResponse, str
 // GetUserByID retrieves a user by their ID
 func (s *Service) GetUserByID(userID string) (*models.UserResponse, error) {
 	query := `
-		SELECT id, email, created_at, updated_at
+		SELECT id, email, role, created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
 
 	var user models.User
 	err := database.DB.QueryRow(query, userID).Scan(
-		&user.ID, &user.Email, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Email, &user.Role, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -122,14 +128,14 @@ func (s *Service) RefreshToken(tokenString string) (string, error) {
 // getUserByEmail is a helper method to get user by email (includes password)
 func (s *Service) getUserByEmail(email string) (*models.User, error) {
 	query := `
-		SELECT id, email, password, created_at, updated_at
+		SELECT id, email, password, role, created_at, updated_at
 		FROM users
 		WHERE email = $1
 	`
 
 	var user models.User
 	err := database.DB.QueryRow(query, email).Scan(
-		&user.ID, &user.Email, &user.Password, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Email, &user.Password, &user.Role, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err

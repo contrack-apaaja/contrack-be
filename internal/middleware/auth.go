@@ -1,8 +1,11 @@
 package middleware
 
 import (
+	"database/sql"
 	"strings"
 
+	"contrack-be/internal/database"
+	"contrack-be/internal/models"
 	"contrack-be/internal/services/jwt"
 	"contrack-be/internal/utils"
 
@@ -42,6 +45,15 @@ func AuthMiddleware(jwtService *jwt.Service) gin.HandlerFunc {
 		c.Set("user_id", claims.UserID)
 		c.Set("user_email", claims.Email)
 		
+		// Get user role from database and store in context
+		userRole, err := getUserRoleFromDB(claims.UserID)
+		if err != nil {
+			utils.UnauthorizedResponse(c, "Failed to retrieve user role")
+			c.Abort()
+			return
+		}
+		c.Set("user_role", userRole)
+		
 		c.Next()
 	}
 }
@@ -66,4 +78,20 @@ func GetUserEmail(c *gin.Context) (string, bool) {
 	
 	userEmailStr, ok := userEmail.(string)
 	return userEmailStr, ok
+}
+
+// getUserRoleFromDB retrieves the user role from the database
+func getUserRoleFromDB(userID string) (models.UserRole, error) {
+	query := `SELECT role FROM users WHERE id = $1`
+	
+	var role string
+	err := database.DB.QueryRow(query, userID).Scan(&role)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", err
+		}
+		return "", err
+	}
+	
+	return models.UserRole(role), nil
 }
