@@ -20,7 +20,7 @@ type Service struct {
 func NewAuthService(jwtSvc *jwtService.Service) *Service {
 	return &Service{
 		jwtService: jwtSvc,
-	}
+	}}
 
 
 // Register creates a new user account
@@ -41,7 +41,7 @@ func (s *Service) Register(req *models.UserRegistrationRequest) (*models.UserRes
 	}
 
 	// Use provided role or default to REGULAR if not specified
-	role := req.Role
+	role := models.UserRole(req.Role)
 	if role == "" {
 		role = models.GetDefaultRole()
 	}
